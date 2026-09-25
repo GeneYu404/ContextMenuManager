@@ -1,6 +1,8 @@
-# 右键菜单管家 · C# / .NET 10 / WPF
+# 右键菜单管家 · C# / .NET 10 / Avalonia 12
 
 Windows 10 / 11 右键菜单管理工具。直接读写真实注册表，开关即时生效，每次写入前先抓取现场快照，程序重启后依然可以逐条撤销。
+
+界面基于 Avalonia 12 自绘渲染，自动跟随系统深浅色与强调色；扫描、写入、快照、提权等核心逻辑与原 WPF 版一致，行为以 WPF 版为基准（完整原版见 git 历史首个提交）。
 
 主要能力：
 
@@ -11,7 +13,7 @@ Windows 10 / 11 右键菜单管理工具。直接读写真实注册表，开关�
 - **全量文件类型扫描**：除 8 个通配场景外，新增「文件类型」场景 —— 具体扩展名 / ProgID 上注册的项（含被其它工具写过 `LegacyDisable` / `ProgrammaticAccessOnly` 禁用标记的）全部可见可恢复；上千条按**所属程序分组显示**，配合“程序筛选”下拉与搜索框（支持按 exe/dll 名搜索）快速定位；"新建"菜单同时识别 ProgID 级 ShellNew（`txtfile\ShellNew`、`Folder\ShellNew` 这类不在扩展名键下的）。
 - **自绘动画**：写入成功的行闪一次绿（启用）/ 红（禁用）光，列表载入按序号错峰淡入。
 
-零第三方 NuGet 依赖：界面使用 .NET 9+ 内置的 Fluent 主题（`ThemeMode="System"`），自动跟随系统深浅色与强调色。
+依赖仅为 Avalonia 家族 NuGet 包（`Avalonia`、`Avalonia.Desktop`、`Avalonia.Themes.Fluent`、`Avalonia.Fonts.Inter`），界面使用 Fluent 主题（`RequestedThemeVariant="Default"`），自动跟随系统深浅色与强调色。
 
 ## 环境要求
 
@@ -24,7 +26,7 @@ Windows 10 / 11 右键菜单管理工具。直接读写真实注册表，开关�
 程序默认以普通权限运行（`asInvoker`），普通终端即可构建与运行，无需管理员：
 
 ```powershell
-dotnet run --project ContextMenuManager
+dotnet run --project ContextMenuManager.Avalonia
 ```
 
 只有真正写入 HKLM 时才会弹一次 UAC，确认后窗口会带队列重启并自动把这批操作做完。
@@ -32,8 +34,8 @@ dotnet run --project ContextMenuManager
 发布为单文件 exe：
 
 ```powershell
-dotnet publish ContextMenuManager -c Release
-# 输出：ContextMenuManager\bin\Release\net10.0-windows\win-x64\publish\ContextMenuManager.exe
+dotnet publish ContextMenuManager.Avalonia -c Release
+# 输出：ContextMenuManager.Avalonia\bin\Release\net10.0-windows\win-x64\publish\ContextMenuManager.exe
 ```
 
 如需免装运行时，把 csproj 中的 `SelfContained` 改为 `true`（体积约 70MB）。
@@ -41,28 +43,15 @@ dotnet publish ContextMenuManager -c Release
 ## 目录结构
 
 ```
-ContextMenuManager/
-├── Models/
-│   ├── MenuEntry       场景、菜单项模型（含 View / IconRaw / RunAsAdmin）
-│   └── RegOp           .reg 预览用的最小写入描述 + KeySnapshot 现场模型
-├── Services/
-│   ├── MenuScanner     枚举 HKLM/HKCU × 64/32 位视图中真实存在的菜单项并合并
-│   ├── MenuWriter      启用 / 禁用 / 新增 / 编辑 / 删除，写入前自动备份
-│   ├── KeySnapshot     现场抓取与写回（撤销 / 批量回滚的核心）
-│   ├── RegScript       生成 .reg 文本（UTF-16 LE + BOM），预览与另存脚本
-│   ├── Elevation       asInvoker 权限判断 + runas 重启 + 待执行队列文件
-│   ├── PendingOps      提权续跑的操作队列（System.Text.Json 序列化）
-│   ├── BackupService   调用 reg.exe export / import（区分 /reg:32 与 /reg:64）
-│   ├── TweakService    经典菜单、快捷方式箭头等系统优化
-│   ├── ExplorerService SHChangeNotify、重启资源管理器、跳转 regedit
-│   ├── IconLoader      ExtractIconEx 提取图标
-│   └── Native          P/Invoke 声明
-├── ViewModels/         MVVM（手写 ObservableObject / RelayCommand）
-│   └── LogStore        操作日志 + 现场快照持久化到 history.json
-├── Views/
-│   ├── AddItemDialog   新建 / 编辑两用对话框，含实时 .reg 预览
-│   └── Fx              行闪光、列表错峰淡入、抽屉滑动动画
-└── MainWindow.xaml     主界面
+ContextMenuManager.Avalonia/
+├── Models/                    场景、菜单项模型（含 View / IconRaw / RunAsAdmin）
+├── Services/                  扫描、写入、快照、备份、提权、系统优化、图标提取
+├── ViewModels/                MVVM 基础设施、主视图模型、EntryView、UiBridge
+├── Views/                     主窗口、新建/编辑对话框、消息框、动画与同步对话框辅助
+├── Converters/                IsVisible 语义的布尔转换器
+├── MainWindow.axaml           主界面
+├── App.axaml                  资源、样式与应用启动接线
+└── app.manifest               asInvoker 清单（PerMonitorV2 DPI）
 ```
 
 ## 实现要点
@@ -92,3 +81,4 @@ ContextMenuManager/
 - 提权续跑会以新进程重启窗口，当前窗口的筛选、选中状态不会带过去；队列本身不受影响。
 - 以其他管理员账户提权运行时，HKCU 指向的是该管理员账户，而非当前登录用户。
 - “以管理员运行”模板中，被右键的路径若含单引号，参数会被截断。
+- 条目列表未做虚拟化（全量实例化），「文件类型」场景上千条时首次渲染可能偏慢（详见 `AGENTS.md` 遗留事项）。
