@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Security;
+using System.Windows;
+using System.Windows.Data;
 using System.Windows.Input;
 using ContextMenuManager.Models;
 using ContextMenuManager.Services;
@@ -44,7 +46,7 @@ public sealed class MainViewModel : ObservableObject
         foreach (var t in TweakService.All)
             Tweaks.Add(new TweakViewModel(t, this));
 
-        EntriesView = new EntryView(Entries);
+        EntriesView = CollectionViewSource.GetDefaultView(Entries);
         EntriesView.Filter = FilterEntry;
 
         RefreshCommand = new AsyncCommand(ReloadAsync);
@@ -83,7 +85,7 @@ public sealed class MainViewModel : ObservableObject
 
     public ObservableCollection<NavItem> NavItems { get; } = [];
     public ObservableCollection<MenuEntryViewModel> Entries { get; } = [];
-    public EntryView EntriesView { get; }
+    public ICollectionView EntriesView { get; }
     public ObservableCollection<TweakViewModel> Tweaks { get; } = [];
     public ObservableCollection<LogItem> Log { get; } = [];
 
@@ -286,13 +288,15 @@ public sealed class MainViewModel : ObservableObject
             ProgramOptions.Add(p);
         OnPropertyChanged(nameof(ProgramFilterIndex));
 
-        EntriesView.ClearSorts();
-        EntriesView.GroupBy(null);
+        EntriesView.SortDescriptions.Clear();
+        EntriesView.GroupDescriptions.Clear();
         if (scene.Kind == SceneKind.FileTypes)
         {
-            EntriesView.SortBy(nameof(MenuEntryViewModel.Program));
-            EntriesView.SortBy(nameof(MenuEntryViewModel.Name));
-            EntriesView.GroupBy(nameof(MenuEntryViewModel.Program));
+            EntriesView.SortDescriptions.Add(
+                new SortDescription(nameof(MenuEntryViewModel.Program), ListSortDirection.Ascending));
+            EntriesView.SortDescriptions.Add(
+                new SortDescription(nameof(MenuEntryViewModel.Name), ListSortDirection.Ascending));
+            EntriesView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(MenuEntryViewModel.Program)));
         }
         EntriesView.Refresh();
     }
@@ -376,7 +380,7 @@ public sealed class MainViewModel : ObservableObject
             return false;
         }
 
-        UiBridge.Shutdown();
+        Application.Current.Shutdown();
         return false;
     }
 
@@ -387,7 +391,7 @@ public sealed class MainViewModel : ObservableObject
             ShowToast("当前已是管理员权限");
             return;
         }
-        if (Elevation.TryRestartElevated()) UiBridge.Shutdown();
+        if (Elevation.TryRestartElevated()) Application.Current.Shutdown();
     }
 
     internal bool TryApplyEnabled(MenuEntryViewModel vm, bool enabled)
@@ -540,7 +544,7 @@ public sealed class MainViewModel : ObservableObject
 
     private void SetAll(bool enabled)
     {
-        var targets = EntriesView.Where(e => e.Enabled != enabled).ToList();
+        var targets = EntriesView.Cast<MenuEntryViewModel>().Where(e => e.Enabled != enabled).ToList();
         if (targets.Count == 0)
         {
             ShowToast(enabled ? "当前列表已全部启用" : "当前列表已全部禁用");
@@ -937,12 +941,12 @@ public sealed class MainViewModel : ObservableObject
         ExplorerService.OpenFolder(_backup.Folder);
     }
 
-    private async void CopyText(string? text)
+    private void CopyText(string? text)
     {
         if (string.IsNullOrEmpty(text)) return;
         try
         {
-            await UiBridge.CopyText(text);
+            Clipboard.SetText(text);
             ShowToast("已复制到剪贴板");
         }
         catch
@@ -1007,7 +1011,21 @@ public sealed class MainViewModel : ObservableObject
         return false;
     }
 
-    private static void ShowError(string message) => UiBridge.ShowError("操作失败", message);
+    private static void ShowError(string message)
+    {
+        var owner = Application.Current?.MainWindow;
+        if (owner is not null)
+            MessageBox.Show(owner, message, "操作失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        else
+            MessageBox.Show(message, "操作失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+    }
 
-    private static bool Confirm(string message) => UiBridge.Confirm("请确认", message);
+    private static bool Confirm(string message)
+    {
+        var owner = Application.Current?.MainWindow;
+        var result = owner is not null
+            ? MessageBox.Show(owner, message, "请确认", MessageBoxButton.YesNo, MessageBoxImage.Question)
+            : MessageBox.Show(message, "请确认", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        return result == MessageBoxResult.Yes;
+    }
 }

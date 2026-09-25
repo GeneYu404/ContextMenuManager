@@ -8,13 +8,8 @@ public abstract class ObservableObject : INotifyPropertyChanged
 {
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    protected void OnPropertyChanged([CallerMemberName] string? name = null)
-    {
+    protected void OnPropertyChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
-
-        // Avalonia 没有 WPF 的自动重查：属性一变就刷新依赖 CanExecute 的按钮
-        CommandManager.InvalidateRequerySuggested();
-    }
 
     protected bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {

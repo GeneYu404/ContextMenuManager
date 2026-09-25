@@ -1,18 +1,27 @@
-<Window x:Class="ContextMenuManager.Avalonia.MainWindow"
-        xmlns="https://github.com/avaloniaui"
+<Window x:Class="ContextMenuManager.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:ContextMenuManager.ViewModels"
-        xmlns:views="using:ContextMenuManager.Views"
-        x:DataType="vm:MainViewModel"
+        xmlns:vm="clr-namespace:ContextMenuManager.ViewModels"
+        xmlns:views="clr-namespace:ContextMenuManager.Views"
         Title="右键菜单管家"
         Width="1320" Height="820" MinWidth="1020" MinHeight="620"
         WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI">
 
+    <Window.InputBindings>
+        <KeyBinding Key="F5" Command="{Binding RefreshCommand}" />
+        <KeyBinding Key="Z" Modifiers="Control" Command="{Binding UndoCommand}" />
+    </Window.InputBindings>
+
+    <Window.CommandBindings>
+        <CommandBinding Command="ApplicationCommands.Find" Executed="OnFind" />
+    </Window.CommandBindings>
+
     <Window.Resources>
+
         <!-- 小标签 -->
-        <DataTemplate x:Key="BadgeTemplate" x:DataType="x:String">
-            <Border Classes.badge="True">
+        <DataTemplate x:Key="BadgeTemplate">
+            <Border Background="{StaticResource BadgeBrush}" CornerRadius="4" Padding="6,1" Margin="0,0,4,0">
                 <TextBlock Text="{Binding}" FontSize="10.5" Opacity="0.85" />
             </Border>
         </DataTemplate>
@@ -20,6 +29,65 @@
         <ItemsPanelTemplate x:Key="HorizontalPanel">
             <StackPanel Orientation="Horizontal" />
         </ItemsPanelTemplate>
+
+        <!-- 菜单项行：写入成功后整行闪一次绿（启用）/红（禁用）光 -->
+        <DataTemplate x:Key="EntryTemplate" DataType="{x:Type vm:MenuEntryViewModel}">
+            <Grid Margin="4,7" views:Fx.FlashToken="{Binding FlashToken}">
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Setter Property="views:Fx.FlashTint" Value="#4D3FA472" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Enabled}" Value="False">
+                                <Setter Property="views:Fx.FlashTint" Value="#4DD3453F" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Border x:Name="IconBox" Width="36" Height="36" Style="{StaticResource Card}" CornerRadius="8">
+                    <Grid>
+                        <Image Source="{Binding Icon}" Width="18" Height="18"
+                               RenderOptions.BitmapScalingMode="HighQuality" />
+                        <TextBlock Text="{Binding FallbackGlyph}" Style="{StaticResource Glyph}" FontSize="16" Opacity="0.7"
+                                   Visibility="{Binding HasIcon, Converter={StaticResource InverseBoolToVis}}" />
+                    </Grid>
+                </Border>
+
+                <StackPanel Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock x:Name="NameText" Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" MaxWidth="360" />
+                        <ItemsControl ItemsSource="{Binding Badges}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                      ItemTemplate="{StaticResource BadgeTemplate}"
+                                      ItemsPanel="{StaticResource HorizontalPanel}" Focusable="False" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding Subtitle}" FontFamily="{StaticResource MonoFont}" FontSize="11"
+                               Opacity="0.55" TextTrimming="CharacterEllipsis" Margin="0,3,0,0" />
+                </StackPanel>
+
+                <CheckBox Grid.Column="2" Style="{StaticResource SwitchStyle}"
+                          IsChecked="{Binding Enabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                          ToolTip="开关即时写入注册表" />
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Enabled}" Value="False">
+                    <Setter TargetName="NameText" Property="TextDecorations" Value="Strikethrough" />
+                    <Setter TargetName="NameText" Property="Opacity" Value="0.5" />
+                    <Setter TargetName="IconBox" Property="Opacity" Value="0.4" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- 统计数字 -->
+        <Style x:Key="StatNumber" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
     </Window.Resources>
 
     <Grid>
@@ -36,8 +104,8 @@
         <DockPanel Grid.RowSpan="2" Margin="12,14,8,12">
             <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,0,18">
                 <Border Width="32" Height="32" CornerRadius="8"
-                        Background="{DynamicResource AccentBrush}">
-                    <TextBlock Text="&#xE8FD;" Classes.glyph="True" FontSize="16" Foreground="White" />
+                        Background="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}">
+                    <TextBlock Text="&#xE8FD;" Style="{StaticResource Glyph}" FontSize="16" Foreground="White" />
                 </Border>
                 <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="右键菜单管家" FontSize="14" FontWeight="SemiBold" />
@@ -51,9 +119,9 @@
                     <StackPanel>
                         <TextBlock Text="{Binding ElevationHint}" TextWrapping="Wrap" FontSize="11.5" Opacity="0.8" />
                         <Button Command="{Binding RequestElevationCommand}" HorizontalAlignment="Left" Margin="0,8,0,0"
-                                IsVisible="{Binding IsAdmin, Converter={StaticResource InverseBool}}">
+                                Visibility="{Binding IsAdmin, Converter={StaticResource InverseBoolToVis}}">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE734;" Classes.glyph="True" FontSize="12" Margin="0,0,6,0" />
+                                <TextBlock Text="&#xE734;" Style="{StaticResource Glyph}" FontSize="12" Margin="0,0,6,0" />
                                 <TextBlock Text="以管理员身份重启" />
                             </StackPanel>
                         </Button>
@@ -62,34 +130,34 @@
                 <Button Command="{Binding BackupAllCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Margin="0,0,0,6" Padding="10,6">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE8F1;" Classes.glyph="True" FontSize="13" Margin="0,0,8,0" />
+                        <TextBlock Text="&#xE8F1;" Style="{StaticResource Glyph}" FontSize="13" Margin="0,0,8,0" />
                         <TextBlock Text="完整备份" />
                     </StackPanel>
                 </Button>
                 <Button Command="{Binding OpenBackupFolderCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                         Padding="10,6">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="&#xE838;" Classes.glyph="True" FontSize="13" Margin="0,0,8,0" />
+                        <TextBlock Text="&#xE838;" Style="{StaticResource Glyph}" FontSize="13" Margin="0,0,8,0" />
                         <TextBlock Text="打开备份文件夹" />
                     </StackPanel>
                 </Button>
             </StackPanel>
 
-            <ListBox ItemsSource="{Binding NavItems}" SelectedItem="{Binding SelectedNav, Mode=TwoWay}"
-                     Background="Transparent" BorderThickness="0"
+            <ListBox ItemsSource="{Binding NavItems}" SelectedItem="{Binding SelectedNav}"
+                     Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="vm:NavItem">
+                    <DataTemplate DataType="{x:Type vm:NavItem}">
                         <StackPanel>
                             <Border Height="1" Background="{StaticResource StrokeBrush}" Margin="0,6,0,10"
-                                    IsVisible="{Binding StartsGroup}" />
+                                    Visibility="{Binding StartsGroup, Converter={StaticResource BoolToVis}}" />
                             <Grid Height="30">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="28" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="{Binding Glyph}" Classes.glyph="True" HorizontalAlignment="Left" />
+                                <TextBlock Text="{Binding Glyph}" Style="{StaticResource Glyph}" HorizontalAlignment="Left" />
                                 <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13" VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" />
                                 <TextBlock Grid.Column="2" Text="{Binding Count}" FontFamily="{StaticResource MonoFont}"
@@ -107,7 +175,7 @@
             <Grid>
 
                 <!-- ============================================================ 场景页 -->
-                <Grid Margin="24,20,20,16" IsVisible="{Binding IsScenePage}">
+                <Grid Margin="24,20,20,16" Visibility="{Binding IsScenePage, Converter={StaticResource BoolToVis}}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="352" />
@@ -121,15 +189,15 @@
 
                     <!-- 标题 -->
                     <DockPanel Grid.ColumnSpan="2" Margin="0,0,0,14">
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
-                            <Button Content="全部启用" Command="{Binding EnableAllCommand}" />
-                            <Button Content="全部禁用" Command="{Binding DisableAllCommand}" />
-                            <Button Command="{Binding RefreshCommand}" ToolTip.Tip="刷新 (F5)">
-                                <TextBlock Text="&#xE72C;" Classes.glyph="True" FontSize="13" />
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Content="全部启用" Command="{Binding EnableAllCommand}" Margin="0,0,6,0" />
+                            <Button Content="全部禁用" Command="{Binding DisableAllCommand}" Margin="0,0,6,0" />
+                            <Button Command="{Binding RefreshCommand}" Margin="0,0,6,0" ToolTip="刷新 (F5)">
+                                <TextBlock Text="&#xE72C;" Style="{StaticResource Glyph}" FontSize="13" />
                             </Button>
-                            <Button Theme="{StaticResource AccentButton}" Command="{Binding AddCommand}">
+                            <Button Style="{StaticResource AccentButton}" Command="{Binding AddCommand}">
                                 <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE710;" Classes.glyph="True" FontSize="12" Foreground="White"
+                                    <TextBlock Text="&#xE710;" Style="{StaticResource Glyph}" FontSize="12" Foreground="White"
                                                Margin="0,0,6,0" />
                                     <TextBlock Text="新建菜单项" Foreground="White" />
                                 </StackPanel>
@@ -137,9 +205,9 @@
                         </StackPanel>
 
                         <StackPanel Orientation="Horizontal">
-                            <Border Width="46" Height="46" Classes.card="True" CornerRadius="10">
-                                <TextBlock Text="{Binding PageGlyph}" Classes.glyph="True" FontSize="20"
-                                           Foreground="{DynamicResource AccentBrush}" />
+                            <Border Width="46" Height="46" Style="{StaticResource Card}" CornerRadius="10">
+                                <TextBlock Text="{Binding PageGlyph}" Style="{StaticResource Glyph}" FontSize="20"
+                                           Foreground="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}" />
                             </Border>
                             <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding PageTitle}" FontSize="24" FontWeight="SemiBold" />
@@ -149,7 +217,7 @@
                     </DockPanel>
 
                     <!-- 统计条 -->
-                    <Border Grid.Row="1" Grid.ColumnSpan="2" Classes.card="True" Margin="0,0,0,12">
+                    <Border Grid.Row="1" Grid.ColumnSpan="2" Style="{StaticResource Card}" Margin="0,0,0,12">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="110" />
@@ -159,16 +227,16 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Margin="16,8">
                                 <TextBlock Text="已启用" FontSize="11" Opacity="0.55" />
-                                <TextBlock Text="{Binding EnabledCount}" Classes.statNumber="True"
-                                           Foreground="{DynamicResource AccentBrush}" />
+                                <TextBlock Text="{Binding EnabledCount}" Style="{StaticResource StatNumber}"
+                                           Foreground="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Margin="16,8">
                                 <TextBlock Text="已禁用" FontSize="11" Opacity="0.55" />
-                                <TextBlock Text="{Binding DisabledCount}" Classes.statNumber="True" />
+                                <TextBlock Text="{Binding DisabledCount}" Style="{StaticResource StatNumber}" />
                             </StackPanel>
                             <StackPanel Grid.Column="2" Margin="16,8">
                                 <TextBlock Text="第三方" FontSize="11" Opacity="0.55" />
-                                <TextBlock Text="{Binding ThirdPartyCount}" Classes.statNumber="True" />
+                                <TextBlock Text="{Binding ThirdPartyCount}" Style="{StaticResource StatNumber}" />
                             </StackPanel>
                             <StackPanel Grid.Column="3" Margin="16,8" VerticalAlignment="Center">
                                 <TextBlock Text="开关即时写入：写前抓取现场快照并自动备份，重启后仍可在操作日志中撤销" FontSize="11.5"
@@ -187,20 +255,19 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Grid>
-                            <TextBox x:Name="SearchBox" Text="{Binding SearchText}"
+                            <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
                                      Padding="32,6,8,6" VerticalContentAlignment="Center" />
-                            <TextBlock Text="&#xE721;" Classes.glyph="True" FontSize="13" Opacity="0.5"
+                            <TextBlock Text="&#xE721;" Style="{StaticResource Glyph}" FontSize="13" Opacity="0.5"
                                        HorizontalAlignment="Left" Margin="11,0,0,0" IsHitTestVisible="False" />
                             <TextBlock Text="搜索名称、命令、CLSID、发布者…  (Ctrl+F)" Margin="33,0,0,0" VerticalAlignment="Center"
                                        Opacity="0.45" IsHitTestVisible="False"
-                                       IsVisible="{Binding SearchText, Converter={StaticResource Null}}" />
+                                       Visibility="{Binding SearchText, Converter={StaticResource NullToVis}}" />
                         </Grid>
                         <ComboBox Grid.Column="1" Width="158" Margin="8,0,0,0"
                                   ItemsSource="{Binding ProgramOptions}"
-                                  SelectedIndex="{Binding ProgramFilterIndex, Mode=TwoWay}"
-                                  ToolTip.Tip="按所属程序筛选（文件类型场景已按程序分组）" />
-                        <ComboBox Grid.Column="2" Width="112" Margin="8,0,0,0"
-                                  SelectedIndex="{Binding FilterIndex, Mode=TwoWay}">
+                                  SelectedIndex="{Binding ProgramFilterIndex}"
+                                  ToolTip="按所属程序筛选（文件类型场景已按程序分组）" />
+                        <ComboBox Grid.Column="2" Width="112" Margin="8,0,0,0" SelectedIndex="{Binding FilterIndex}">
                             <ComboBoxItem Content="全部" />
                             <ComboBoxItem Content="已启用" />
                             <ComboBoxItem Content="已禁用" />
@@ -208,164 +275,130 @@
                         </ComboBox>
                     </Grid>
 
-                    <!-- 列表：EntryView.Groups 分组渲染 + 载入时按序号错峰淡入 -->
-                    <Border Grid.Row="3" Classes.card="True" Padding="4" Margin="0,0,16,0">
+                    <!-- 列表：载入时按序号错峰淡入（Fx.Reveal） -->
+                    <Border Grid.Row="3" Style="{StaticResource Card}" Padding="4" Margin="0,0,16,0">
                         <Grid>
-                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                                <ItemsControl ItemsSource="{Binding EntriesView.Groups}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="vm:EntryGroup">
-                                            <StackPanel>
-                                                <!-- 组头：未分组时组名为空，隐藏 -->
-                                                <DockPanel Margin="4,12,8,4"
-                                                           IsVisible="{Binding Name, Converter={StaticResource NotNull}}">
+                            <ListBox x:Name="EntryList" ItemsSource="{Binding EntriesView}"
+                                     SelectedItem="{Binding SelectedEntry}"
+                                     ItemTemplate="{StaticResource EntryTemplate}"
+                                     AlternationCount="2147483647"
+                                     Background="Transparent" BorderThickness="0"
+                                     HorizontalContentAlignment="Stretch"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     VirtualizingPanel.IsVirtualizing="True"
+                                     VirtualizingPanel.VirtualizationMode="Recycling">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                        <Setter Property="views:Fx.RevealIndex"
+                                                Value="{Binding (ItemsControl.AlternationIndex), RelativeSource={RelativeSource Self}}" />
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.GroupStyle>
+                                    <GroupStyle>
+                                        <GroupStyle.HeaderTemplate>
+                                            <DataTemplate>
+                                                <DockPanel Margin="4,12,8,4">
                                                     <TextBlock DockPanel.Dock="Right"
                                                                Text="{Binding Items.Count, StringFormat='共 {0} 项'}"
                                                                FontSize="10.5" Opacity="0.45" VerticalAlignment="Center" />
                                                     <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12"
                                                                Opacity="0.8" TextTrimming="CharacterEllipsis" />
                                                 </DockPanel>
-                                                <ItemsControl ItemsSource="{Binding Items}"
-                                                              ContainerPrepared="OnEntryContainerPrepared">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate x:DataType="vm:MenuEntryViewModel">
-                                                            <Grid Margin="4,7"
-                                                                  Classes.entryRow="True"
-                                                                  Classes.flash="{Binding FlashToken, Converter={StaticResource FlashOdd}}"
-                                                                  Classes.disabled="{Binding Enabled, Converter={StaticResource InverseBool}}"
-                                                                  views:Fx.SelectedEntry="{Binding $parent[Window].DataContext.SelectedEntry}"
-                                                                  PointerPressed="OnRowPointerPressed">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="Auto" />
-                                                                    <ColumnDefinition Width="*" />
-                                                                    <ColumnDefinition Width="Auto" />
-                                                                </Grid.ColumnDefinitions>
-
-                                                                <Border Width="36" Height="36" Classes.card="True" Classes.dim="{Binding Enabled, Converter={StaticResource InverseBool}}"
-                                                                        CornerRadius="8">
-                                                                    <Grid>
-                                                                        <Image Source="{Binding Icon}" Width="18" Height="18" />
-                                                                        <TextBlock Text="{Binding FallbackGlyph}" Classes.glyph="True" FontSize="16" Opacity="0.7"
-                                                                                   IsVisible="{Binding HasIcon, Converter={StaticResource InverseBool}}" />
-                                                                    </Grid>
-                                                                </Border>
-
-                                                                <StackPanel Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center">
-                                                                    <StackPanel Orientation="Horizontal">
-                                                                        <TextBlock Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold"
-                                                                                   TextTrimming="CharacterEllipsis" MaxWidth="360"
-                                                                                   Classes.struck="{Binding Enabled, Converter={StaticResource InverseBool}}" />
-                                                                        <ItemsControl ItemsSource="{Binding Badges}" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                                                      ItemTemplate="{StaticResource BadgeTemplate}"
-                                                                                      ItemsPanel="{StaticResource HorizontalPanel}" />
-                                                                    </StackPanel>
-                                                                    <TextBlock Text="{Binding Subtitle}" FontFamily="{StaticResource MonoFont}" FontSize="11"
-                                                                               Opacity="0.55" TextTrimming="CharacterEllipsis" Margin="0,3,0,0" />
-                                                                </StackPanel>
-
-                                                                <CheckBox Grid.Column="2" Theme="{StaticResource SwitchStyle}"
-                                                                          IsChecked="{Binding Enabled, Mode=TwoWay}"
-                                                                          ToolTip.Tip="开关即时写入注册表" />
-                                                            </Grid>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                            </StackPanel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </ScrollViewer>
-
+                                            </DataTemplate>
+                                        </GroupStyle.HeaderTemplate>
+                                    </GroupStyle>
+                                </ListBox.GroupStyle>
+                            </ListBox>
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"
-                                        IsVisible="{Binding EntriesView.Count, Converter={StaticResource Zero}}">
-                                <TextBlock Text="&#xE9CE;" Classes.glyph="True" FontSize="28" Opacity="0.3" />
+                                        Visibility="{Binding HasItems, ElementName=EntryList, Converter={StaticResource InverseBoolToVis}}">
+                                <TextBlock Text="&#xE9CE;" Style="{StaticResource Glyph}" FontSize="28" Opacity="0.3" />
                                 <TextBlock Text="没有匹配的菜单项" Opacity="0.5" Margin="0,8,0,0" />
                             </StackPanel>
                         </Grid>
                     </Border>
 
                     <!-- 详情 -->
-                    <Border Grid.Row="2" Grid.RowSpan="2" Grid.Column="1" Classes.card="True">
+                    <Border Grid.Row="2" Grid.RowSpan="2" Grid.Column="1" Style="{StaticResource Card}">
                         <Grid>
                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24"
-                                        IsVisible="{Binding SelectedEntry, Converter={StaticResource Null}}">
-                                <TextBlock Text="&#xE946;" Classes.glyph="True" FontSize="26" Opacity="0.35" />
+                                        Visibility="{Binding SelectedEntry, Converter={StaticResource NullToVis}}">
+                                <TextBlock Text="&#xE946;" Style="{StaticResource Glyph}" FontSize="26" Opacity="0.35" />
                                 <TextBlock Text="选择一个菜单项" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,10,0,4" />
                                 <TextBlock Text="查看它的注册表位置，设置 Shift 显示与菜单位置，所有改动即时生效。"
                                            TextWrapping="Wrap" TextAlignment="Center" Opacity="0.6" FontSize="12" />
                             </StackPanel>
 
-                            <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                          IsVisible="{Binding SelectedEntry, Converter={StaticResource NotNull}}">
-                                <StackPanel Margin="18">
+                            <ScrollViewer DataContext="{Binding SelectedEntry}" VerticalScrollBarVisibility="Auto"
+                                          Visibility="{Binding Converter={StaticResource NotNullToVis}}">
+                                <StackPanel Margin="18,18,18,18">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <Border Width="48" Height="48" Classes.card="True" CornerRadius="10">
+                                        <Border Width="48" Height="48" Style="{StaticResource Card}" CornerRadius="10">
                                             <Grid>
-                                                <Image Source="{Binding SelectedEntry.Icon}" Width="24" Height="24" />
-                                                <TextBlock Text="{Binding SelectedEntry.FallbackGlyph}" Classes.glyph="True" FontSize="20"
+                                                <Image Source="{Binding Icon}" Width="24" Height="24"
+                                                       RenderOptions.BitmapScalingMode="HighQuality" />
+                                                <TextBlock Text="{Binding FallbackGlyph}" Style="{StaticResource Glyph}" FontSize="20"
                                                            Opacity="0.7"
-                                                           IsVisible="{Binding SelectedEntry.HasIcon, Converter={StaticResource InverseBool}}" />
+                                                           Visibility="{Binding HasIcon, Converter={StaticResource InverseBoolToVis}}" />
                                             </Grid>
                                         </Border>
                                         <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding SelectedEntry.Name}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding SelectedEntry.KindLabel}" FontSize="11.5" Opacity="0.6" Margin="0,2,0,0" />
+                                            <TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding KindLabel}" FontSize="11.5" Opacity="0.6" Margin="0,2,0,0" />
                                         </StackPanel>
-                                        <CheckBox Grid.Column="2" Theme="{StaticResource SwitchStyle}"
-                                                  IsChecked="{Binding SelectedEntry.Enabled, Mode=TwoWay}" />
+                                        <CheckBox Grid.Column="2" Style="{StaticResource SwitchStyle}"
+                                                  IsChecked="{Binding Enabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                     </Grid>
 
-                                    <ItemsControl ItemsSource="{Binding SelectedEntry.Badges}" Margin="0,12,0,0"
+                                    <ItemsControl ItemsSource="{Binding Badges}" Margin="0,12,0,0" Focusable="False"
                                                   ItemTemplate="{StaticResource BadgeTemplate}"
                                                   ItemsPanel="{StaticResource HorizontalPanel}" />
 
                                     <Border Background="{StaticResource BadgeBrush}" CornerRadius="6" Padding="10,8" Margin="0,12,0,0">
-                                        <TextBlock Text="{Binding SelectedEntry.ScopeNote}" TextWrapping="Wrap" FontSize="11.5" Opacity="0.8" />
+                                        <TextBlock Text="{Binding ScopeNote}" TextWrapping="Wrap" FontSize="11.5" Opacity="0.8" />
                                     </Border>
 
-                                    <TextBlock Text="注册表位置" Classes.caption="True" />
-                                    <TextBox Text="{Binding SelectedEntry.FullPath, Mode=OneWay}" Classes.mono="True" />
-                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Spacing="6">
-                                        <Button Content="复制路径" CommandParameter="{Binding SelectedEntry.FullPath}"
-                                                Command="{Binding CopyCommand}" />
+                                    <TextBlock Text="注册表位置" Style="{StaticResource Caption}" />
+                                    <TextBox Text="{Binding FullPath, Mode=OneWay}" Style="{StaticResource MonoBox}" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                        <Button Content="复制路径" Margin="0,0,6,0" CommandParameter="{Binding FullPath}"
+                                                Command="{Binding DataContext.CopyCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                                         <Button Content="在注册表编辑器中打开"
-                                                Command="{Binding OpenRegeditCommand}" />
+                                                Command="{Binding DataContext.OpenRegeditCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                                     </StackPanel>
 
-                                    <StackPanel IsVisible="{Binding SelectedEntry.Command, Converter={StaticResource NotNull}}">
-                                        <TextBlock Text="命令 / 模块" Classes.caption="True" />
-                                        <TextBox Text="{Binding SelectedEntry.Command, Mode=OneWay}" Classes.mono="True" />
+                                    <StackPanel Visibility="{Binding Command, Converter={StaticResource NotNullToVis}}">
+                                        <TextBlock Text="命令 / 模块" Style="{StaticResource Caption}" />
+                                        <TextBox Text="{Binding Command, Mode=OneWay}" Style="{StaticResource MonoBox}" />
                                     </StackPanel>
 
-                                    <StackPanel IsVisible="{Binding SelectedEntry.Clsid, Converter={StaticResource NotNull}}">
-                                        <TextBlock Text="CLSID" Classes.caption="True" />
-                                        <TextBox Text="{Binding SelectedEntry.Clsid, Mode=OneWay}" Classes.mono="True" />
+                                    <StackPanel Visibility="{Binding Clsid, Converter={StaticResource NotNullToVis}}">
+                                        <TextBlock Text="CLSID" Style="{StaticResource Caption}" />
+                                        <TextBox Text="{Binding Clsid, Mode=OneWay}" Style="{StaticResource MonoBox}" />
                                     </StackPanel>
 
-                                    <StackPanel IsVisible="{Binding SelectedEntry.Vendor, Converter={StaticResource NotNull}}">
-                                        <TextBlock Text="发布者" Classes.caption="True" />
-                                        <TextBlock Text="{Binding SelectedEntry.Vendor}" TextWrapping="Wrap" />
+                                    <StackPanel Visibility="{Binding Vendor, Converter={StaticResource NotNullToVis}}">
+                                        <TextBlock Text="发布者" Style="{StaticResource Caption}" />
+                                        <TextBlock Text="{Binding Vendor}" TextWrapping="Wrap" />
                                     </StackPanel>
 
                                     <!-- 仅 Shell 命令可设置 -->
-                                    <StackPanel IsVisible="{Binding SelectedEntry.IsShellVerb}">
-                                        <TextBlock Text="显示选项 · 改动即时生效" Classes.caption="True" Margin="0,18,0,8" />
+                                    <StackPanel Visibility="{Binding IsShellVerb, Converter={StaticResource BoolToVis}}">
+                                        <TextBlock Text="显示选项 · 改动即时生效" Style="{StaticResource Caption}" Margin="0,18,0,8" />
                                         <DockPanel Margin="0,0,0,10">
-                                            <CheckBox DockPanel.Dock="Right" Theme="{StaticResource SwitchStyle}"
-                                                      IsChecked="{Binding SelectedEntry.Extended, Mode=TwoWay}" />
+                                            <CheckBox DockPanel.Dock="Right" Style="{StaticResource SwitchStyle}"
+                                                      IsChecked="{Binding Extended, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                             <StackPanel>
                                                 <TextBlock Text="仅在按住 Shift 时显示" />
                                                 <TextBlock Text="Extended" FontFamily="{StaticResource MonoFont}" FontSize="10.5" Opacity="0.5" />
                                             </StackPanel>
                                         </DockPanel>
                                         <DockPanel>
-                                            <ComboBox DockPanel.Dock="Right" Width="96"
-                                                      SelectedIndex="{Binding SelectedEntry.PositionIndex, Mode=TwoWay}">
+                                            <ComboBox DockPanel.Dock="Right" Width="96" SelectedIndex="{Binding PositionIndex, Mode=TwoWay}">
                                                 <ComboBoxItem Content="默认" />
                                                 <ComboBoxItem Content="顶部" />
                                                 <ComboBoxItem Content="底部" />
@@ -378,20 +411,20 @@
                                     </StackPanel>
 
                                     <Button Margin="0,20,0,0" HorizontalAlignment="Left" Padding="12,6"
-                                            IsVisible="{Binding SelectedEntry.IsShellVerb}"
-                                            Command="{Binding EditCommand}">
+                                            Visibility="{Binding IsShellVerb, Converter={StaticResource BoolToVis}}"
+                                            Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource AncestorType=Window}}">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE70F;" Classes.glyph="True" FontSize="13"
+                                            <TextBlock Text="&#xE70F;" Style="{StaticResource Glyph}" FontSize="13"
                                                        Margin="0,0,6,0" />
                                             <TextBlock Text="编辑此项（名称 / 命令 / 图标）" />
                                         </StackPanel>
                                     </Button>
 
                                     <Button Margin="0,8,0,0" HorizontalAlignment="Left" Padding="12,6"
-                                            IsVisible="{Binding SelectedEntry.CanDelete}"
-                                            Command="{Binding DeleteCommand}">
+                                            Visibility="{Binding CanDelete, Converter={StaticResource BoolToVis}}"
+                                            Command="{Binding DataContext.DeleteCommand, RelativeSource={RelativeSource AncestorType=Window}}">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="&#xE74D;" Classes.glyph="True" FontSize="13"
+                                            <TextBlock Text="&#xE74D;" Style="{StaticResource Glyph}" FontSize="13"
                                                        Foreground="{StaticResource DangerBrush}" Margin="0,0,6,0" />
                                             <TextBlock Text="删除此项（自动备份）" Foreground="{StaticResource DangerBrush}" />
                                         </StackPanel>
@@ -404,14 +437,14 @@
 
                 <!-- ============================================================ 系统优化页 -->
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              IsVisible="{Binding IsTweaksPage}">
+                              Visibility="{Binding IsTweaksPage, Converter={StaticResource BoolToVis}}">
                     <StackPanel Margin="24,20,24,24" MaxWidth="960" HorizontalAlignment="Left">
                         <TextBlock Text="系统优化" FontSize="24" FontWeight="SemiBold" />
                         <TextBlock Text="与右键菜单相关的注册表调整。开关即时写入，可在操作日志中撤销。" Opacity="0.65" Margin="0,4,0,18" />
-                        <ItemsControl ItemsSource="{Binding Tweaks}">
+                        <ItemsControl ItemsSource="{Binding Tweaks}" Focusable="False">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:TweakViewModel">
-                                    <Border Classes.card="True" Margin="0,0,0,8" Padding="16,14"
+                                <DataTemplate DataType="{x:Type vm:TweakViewModel}">
+                                    <Border Style="{StaticResource Card}" Margin="0,0,0,8" Padding="16,14"
                                             IsEnabled="{Binding IsApplicable}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
@@ -419,17 +452,17 @@
                                                 <ColumnDefinition Width="*" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <Border Width="38" Height="38" Classes.card="True" CornerRadius="8" VerticalAlignment="Top">
-                                                <TextBlock Text="{Binding Glyph}" Classes.glyph="True" FontSize="17"
-                                                           Foreground="{DynamicResource AccentBrush}" />
+                                            <Border Width="38" Height="38" Style="{StaticResource Card}" CornerRadius="8" VerticalAlignment="Top">
+                                                <TextBlock Text="{Binding Glyph}" Style="{StaticResource Glyph}" FontSize="17"
+                                                           Foreground="{DynamicResource {x:Static SystemColors.AccentColorBrushKey}}" />
                                             </Border>
                                             <StackPanel Grid.Column="1" Margin="14,0,16,0">
                                                 <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" />
                                                 <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Opacity="0.7" Margin="0,3,0,0" FontSize="12.5" />
                                                 <TextBlock Text="{Binding Tags}" FontSize="11" Opacity="0.5" Margin="0,6,0,0" />
                                             </StackPanel>
-                                            <CheckBox Grid.Column="2" Theme="{StaticResource SwitchStyle}"
-                                                      IsChecked="{Binding IsOn, Mode=TwoWay}" />
+                                            <CheckBox Grid.Column="2" Style="{StaticResource SwitchStyle}"
+                                                      IsChecked="{Binding IsOn, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
@@ -439,7 +472,7 @@
                 </ScrollViewer>
 
                 <!-- ============================================================ 操作日志页 -->
-                <Grid Margin="24,20,24,16" IsVisible="{Binding IsLogPage}">
+                <Grid Margin="24,20,24,16" Visibility="{Binding IsLogPage, Converter={StaticResource BoolToVis}}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -452,12 +485,12 @@
                                        Opacity="0.65" Margin="0,4,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                     </DockPanel>
-                    <Border Grid.Row="1" Classes.card="True" Padding="4">
+                    <Border Grid.Row="1" Style="{StaticResource Card}" Padding="4">
                         <Grid>
                             <ListBox x:Name="LogList" ItemsSource="{Binding Log}" Background="Transparent" BorderThickness="0"
-                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                     HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                                 <ListBox.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:LogItem">
+                                    <DataTemplate DataType="{x:Type vm:LogItem}">
                                         <Grid Margin="4,6">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="32" />
@@ -465,30 +498,35 @@
                                                 <ColumnDefinition Width="Auto" />
                                                 <ColumnDefinition Width="Auto" />
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{Binding Glyph}" Classes.glyph="True" HorizontalAlignment="Left" />
+                                            <TextBlock Text="{Binding Glyph}" Style="{StaticResource Glyph}" HorizontalAlignment="Left" />
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
-                                                           Classes.struck="{Binding Undone}" />
+                                                <TextBlock x:Name="LogTitle" Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                                 <TextBlock Text="{Binding Detail}" FontSize="11" Opacity="0.55" TextTrimming="CharacterEllipsis" />
                                             </StackPanel>
                                             <TextBlock Grid.Column="2" Text="{Binding TimeText}" FontFamily="{StaticResource MonoFont}"
                                                        FontSize="11" Opacity="0.5" VerticalAlignment="Center" Margin="12,0" />
                                             <Button Grid.Column="3" Content="撤销" CommandParameter="{Binding}"
-                                                    IsVisible="{Binding CanUndo}"
-                                                    Command="{Binding $parent[Window].DataContext.UndoCommand}" />
+                                                    Visibility="{Binding CanUndo, Converter={StaticResource BoolToVis}}"
+                                                    Command="{Binding DataContext.UndoCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                                         </Grid>
+                                        <DataTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding Undone}" Value="True">
+                                                <Setter TargetName="LogTitle" Property="TextDecorations" Value="Strikethrough" />
+                                                <Setter TargetName="LogTitle" Property="Opacity" Value="0.5" />
+                                            </DataTrigger>
+                                        </DataTemplate.Triggers>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
                             <TextBlock Text="还没有任何操作" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5"
                                        IsHitTestVisible="False"
-                                       IsVisible="{Binding Log.Count, Converter={StaticResource Zero}}" />
+                                       Visibility="{Binding HasItems, ElementName=LogList, Converter={StaticResource InverseBoolToVis}}" />
                         </Grid>
                     </Border>
                 </Grid>
 
                 <ProgressBar IsIndeterminate="True" Height="3" VerticalAlignment="Top" Margin="1,0,0,0"
-                             IsVisible="{Binding IsBusy}" />
+                             Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}" />
             </Grid>
         </Border>
 
@@ -498,10 +536,10 @@
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <TextBlock Text="{Binding ToastText}" VerticalAlignment="Center" Opacity="0.7" Margin="0,0,12,0"
-                               IsVisible="{Binding ToastText, Converter={StaticResource NotNull}}" />
+                               Visibility="{Binding ToastText, Converter={StaticResource NotNullToVis}}" />
                     <Button Command="{Binding RestartExplorerCommand}" Padding="10,4">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE72C;" Classes.glyph="True" FontSize="12" Margin="0,0,6,0" />
+                            <TextBlock Text="&#xE72C;" Style="{StaticResource Glyph}" FontSize="12" Margin="0,0,6,0" />
                             <TextBlock Text="重启资源管理器" />
                         </StackPanel>
                     </Button>
@@ -509,23 +547,22 @@
 
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Border Background="{StaticResource WarnSoftBrush}" CornerRadius="4" Padding="8,2" Margin="0,0,12,0"
-                            IsVisible="{Binding PendingRestart}">
+                            Visibility="{Binding PendingRestart, Converter={StaticResource BoolToVis}}">
                         <TextBlock Text="部分更改需重启资源管理器后生效" Foreground="{StaticResource WarnBrush}" FontSize="11.5" />
                     </Border>
 
                     <TextBlock Text="就绪 · 开关即时写入注册表" Opacity="0.55"
-                               IsVisible="{Binding LastLog, Converter={StaticResource Null}}" />
+                               Visibility="{Binding LastLog, Converter={StaticResource NullToVis}}" />
 
-                    <StackPanel Orientation="Horizontal"
-                                IsVisible="{Binding LastLog, Converter={StaticResource NotNull}}">
-                        <TextBlock Text="{Binding LastLog.Glyph}" Classes.glyph="True" FontSize="13" Margin="0,0,8,0" />
-                        <TextBlock Text="{Binding LastLog.Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding LastLog.Detail}" Opacity="0.5" Margin="10,0,0,0" MaxWidth="420"
+                    <StackPanel Orientation="Horizontal" DataContext="{Binding LastLog}"
+                                Visibility="{Binding Converter={StaticResource NotNullToVis}}">
+                        <TextBlock Text="{Binding Glyph}" Style="{StaticResource Glyph}" FontSize="13" Margin="0,0,8,0" />
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Detail}" Opacity="0.5" Margin="10,0,0,0" MaxWidth="420"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         <Button Content="撤销 (Ctrl+Z)" Margin="12,0,0,0" Padding="10,2"
-                                IsVisible="{Binding LastLog.CanUndo}"
-                                CommandParameter="{Binding LastLog}"
-                                Command="{Binding UndoCommand}" />
+                                Visibility="{Binding CanUndo, Converter={StaticResource BoolToVis}}"
+                                Command="{Binding DataContext.UndoCommand, RelativeSource={RelativeSource AncestorType=Window}}" />
                     </StackPanel>
                 </StackPanel>
             </DockPanel>

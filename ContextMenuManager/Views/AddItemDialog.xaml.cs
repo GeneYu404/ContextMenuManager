@@ -1,23 +1,17 @@
 using System.IO;
 using System.Text.RegularExpressions;
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Input;
-using Avalonia.Input.Platform;
-using Avalonia.Interactivity;
-using Avalonia.Media;
-using Avalonia.Platform.Storage;
-using Avalonia.Threading;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
 using ContextMenuManager.Models;
 using ContextMenuManager.Services;
+using Microsoft.Win32;
 
 namespace ContextMenuManager.Views;
 
 /// <summary>
 /// 新建 / 编辑两用对话框。两个模式都带实时 .reg 写入预览，
 /// 预览文本与右侧按钮另存的脚本，就是 MenuWriter 将要写入的最小集合。
-/// 与 WPF 版的差异：文件选择与剪贴板改为异步 API（处理器 async void），
-/// 其余交互逻辑原样照搬。
 /// </summary>
 public partial class AddItemDialog : Window
 {
@@ -26,18 +20,11 @@ public partial class AddItemDialog : Window
     private static readonly SceneKind[] FileLike = [SceneKind.File, SceneKind.AllObjects];
     private static readonly SceneKind[] FolderLike = [SceneKind.Directory, SceneKind.Background, SceneKind.Drive, SceneKind.Folder];
 
-    private static readonly FilePickerFileType ProgramFiles = new("程序 (*.exe;*.bat;*.cmd)")
-    {
-        Patterns = ["*.exe", "*.bat", "*.cmd"],
-    };
-    private static readonly FilePickerFileType RegFiles = new("注册表脚本 (*.reg)") { Patterns = ["*.reg"] };
-
     private readonly SceneDefinition? _scene;   // 新建模式
     private readonly MenuEntry? _edit;          // 编辑模式
     private bool _keyEdited;
     private bool _settingKey;
     private bool _loading = true;
-    private bool _resultSet;
 
     public AddItemDialog(SceneDefinition scene)
     {
@@ -54,7 +41,12 @@ public partial class AddItemDialog : Window
         TemplateBox.ItemsSource = templates;
         TemplateBox.IsEnabled = templates.Count > 0;
 
-        WireCommon();
+        Loaded += (_, _) =>
+        {
+            _loading = false;
+            UpdatePreview();
+            NameBox.Focus();
+        };
     }
 
     public AddItemDialog(MenuEntry edit)
@@ -68,7 +60,7 @@ public partial class AddItemDialog : Window
         SubText.Text = $"写入位置：{edit.FullPath}"
                        + (edit.Is32Bit ? "（32 位视图 / Wow6432Node）" : "")
                        + "，保存后即时生效。";
-        TemplatePanel.IsVisible = false;
+        TemplatePanel.Visibility = Visibility.Collapsed;
         HintText.Text = "“以管理员身份运行”会幂等地包装 / 还原命令并同步 UAC 盾牌；右侧预览即实际写入内容。";
 
         SetKey(edit.KeyName);
@@ -81,41 +73,16 @@ public partial class AddItemDialog : Window
         AdminBox.IsChecked = edit.RunAsAdmin;
         PositionBox.SelectedIndex = edit.Position switch { "Top" => 1, "Bottom" => 2, _ => 0 };
 
-        WireCommon();
-    }
-
-    public AddVerbRequest? Result { get; private set; }
-    public EditVerbRequest? EditResult { get; private set; }
-
-    /// <summary>打开后结束加载态并刷新预览；同时挂上 Enter / Esc 与点 X 的关闭语义。</summary>
-    private void WireCommon()
-    {
-        Opened += (_, _) =>
+        Loaded += (_, _) =>
         {
             _loading = false;
             UpdatePreview();
             NameBox.Focus();
         };
-
-        KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Enter) OnOk(this, e);
-            else if (e.Key == Key.Escape) CancelClose();
-        };
-
-        // Avalonia 的 CheckBox 没有 WPF 的 Checked/Unchecked 事件，改订阅 IsCheckedChanged
-        ExtendedBox.IsCheckedChanged += (_, _) => UpdatePreview();
-        AdminBox.IsCheckedChanged += (_, _) => UpdatePreview();
-
-        // 点 X 关闭等价于取消
-        Closing += (_, e) =>
-        {
-            if (_resultSet) return;
-            e.Cancel = true;
-            _resultSet = true;
-            Dispatcher.UIThread.Post(() => Close(false));
-        };
     }
+
+    public AddVerbRequest? Result { get; private set; }
+    public EditVerbRequest? EditResult { get; private set; }
 
     // ------------------------------------------------------------------ 工具
 
@@ -161,13 +128,11 @@ public partial class AddItemDialog : Window
         if (_loading) return;
         try
         {
-            var name = NameBox.Text ?? "";
-            var command = CommandBox.Text ?? "";
             if (_edit is not null)
             {
                 var r = new EditVerbRequest(
-                    name.Trim(),
-                    command.Trim(),
+                    NameBox.Text.Trim(),
+                    CommandBox.Text.Trim(),
                     CurrentIcon,
                     ExtendedBox.IsChecked == true,
                     AdminBox.IsChecked == true,
@@ -178,9 +143,9 @@ public partial class AddItemDialog : Window
             {
                 var r = new AddVerbRequest(
                     _scene,
-                    (KeyBox.Text ?? "").Trim(),
-                    name.Trim(),
-                    command.Trim(),
+                    KeyBox.Text.Trim(),
+                    NameBox.Text.Trim(),
+                    CommandBox.Text.Trim(),
                     CurrentIcon,
                     ExtendedBox.IsChecked == true,
                     AdminBox.IsChecked == true,
@@ -194,15 +159,13 @@ public partial class AddItemDialog : Window
         }
     }
 
-    private void OnFieldChanged(object? sender, RoutedEventArgs e) => UpdatePreview();
+    private void OnFieldChanged(object sender, RoutedEventArgs e) => UpdatePreview();
 
-    private async void OnCopyPreview(object? sender, RoutedEventArgs e)
+    private void OnCopyPreview(object sender, RoutedEventArgs e)
     {
         try
         {
-            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard
-                ?? throw new InvalidOperationException("剪贴板不可用");
-            await clipboard.SetTextAsync(PreviewBox.Text ?? "");
+            Clipboard.SetText(PreviewBox.Text ?? "");
             ShowNote("已复制 .reg 预览到剪贴板", ok: true);
         }
         catch
@@ -211,25 +174,20 @@ public partial class AddItemDialog : Window
         }
     }
 
-    private async void OnSaveScript(object? sender, RoutedEventArgs e)
+    private void OnSaveScript(object sender, RoutedEventArgs e)
     {
-        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
-        if (storage is null) return;
-
-        var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions
+        var dlg = new SaveFileDialog
         {
-            Title = "另存为注册表脚本",
-            SuggestedFileName = RegScript.SafeFileName(HeaderText.Text ?? ""),
-            DefaultExtension = "reg",
-            FileTypeChoices = [RegFiles],
-        });
-        var path = file?.TryGetLocalPath();
-        if (path is null) return;
+            Filter = "注册表脚本 (*.reg)|*.reg",
+            FileName = RegScript.SafeFileName(HeaderText.Text) + ".reg",
+            DefaultExt = ".reg",
+        };
+        if (dlg.ShowDialog(this) != true) return;
 
         try
         {
-            RegScript.Write(path, PreviewBox.Text ?? "");
-            ShowNote($"已保存脚本：{path}", ok: true);
+            RegScript.Write(dlg.FileName, PreviewBox.Text ?? "");
+            ShowNote($"已保存脚本：{dlg.FileName}", ok: true);
         }
         catch (Exception ex)
         {
@@ -240,15 +198,13 @@ public partial class AddItemDialog : Window
     private void ShowNote(string text, bool ok)
     {
         ErrorText.Text = (ok ? "✓ " : "") + text;
-        ErrorText.Foreground = ok
-            ? new SolidColorBrush(Color.Parse("#2E8B57")) // SeaGreen
-            : ResourceNodeExtensions.FindResource(this, "DangerBrush") as IBrush;
-        ErrorText.IsVisible = true;
+        ErrorText.Foreground = ok ? Brushes.SeaGreen : (Brush)FindResource("DangerBrush");
+        ErrorText.Visibility = Visibility.Visible;
     }
 
     // ------------------------------------------------------------------ 字段联动
 
-    private void OnTemplateChanged(object? sender, SelectionChangedEventArgs e)
+    private void OnTemplateChanged(object sender, SelectionChangedEventArgs e)
     {
         if (TemplateBox.SelectedItem is not MenuTemplate t) return;
         NameBox.Text = t.Name;
@@ -260,18 +216,17 @@ public partial class AddItemDialog : Window
         UpdatePreview();
     }
 
-    private void OnNameChanged(object? sender, TextChangedEventArgs e)
+    private void OnNameChanged(object sender, TextChangedEventArgs e)
     {
         if (_keyEdited) return;
-        var input = NameBox.Text ?? "";
-        var ascii = Regex.Replace(input, "[^A-Za-z0-9_-]", "");
-        SetKey(ascii.Length >= 3 ? ascii : input.Length > 0 ? $"Custom_{(uint)input.GetHashCode() % 100000}" : "");
+        var ascii = Regex.Replace(NameBox.Text, "[^A-Za-z0-9_-]", "");
+        SetKey(ascii.Length >= 3 ? ascii : NameBox.Text.Length > 0 ? $"Custom_{(uint)NameBox.Text.GetHashCode() % 100000}" : "");
         UpdatePreview();
     }
 
-    private void OnKeyChanged(object? sender, TextChangedEventArgs e)
+    private void OnKeyChanged(object sender, TextChangedEventArgs e)
     {
-        if (!_settingKey) _keyEdited = KeyBox.Text is { Length: > 0 };
+        if (!_settingKey) _keyEdited = KeyBox.Text.Length > 0;
         UpdatePreview();
     }
 
@@ -282,39 +237,26 @@ public partial class AddItemDialog : Window
         _settingKey = false;
     }
 
-    private async void OnBrowse(object? sender, RoutedEventArgs e)
+    private void OnBrowse(object sender, RoutedEventArgs e)
     {
-        var storage = TopLevel.GetTopLevel(this)?.StorageProvider;
-        if (storage is null) return;
-
-        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+        var dlg = new OpenFileDialog
         {
             Title = "选择要执行的程序",
-            AllowMultiple = false,
-            FileTypeFilter = [ProgramFiles, FilePickerFileTypes.All],
-        });
-        var path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
-        if (path is null) return;
+            Filter = "程序 (*.exe;*.bat;*.cmd)|*.exe;*.bat;*.cmd|所有文件 (*.*)|*.*",
+        };
+        if (dlg.ShowDialog(this) != true) return;
 
         var arg = ArgFor(_scene?.Kind ?? SceneKind.File);
-        CommandBox.Text = string.IsNullOrEmpty(arg) ? $"\"{path}\"" : $"\"{path}\" \"{arg}\"";
-        if (string.IsNullOrWhiteSpace(IconBox.Text)) IconBox.Text = path;
+        CommandBox.Text = string.IsNullOrEmpty(arg) ? $"\"{dlg.FileName}\"" : $"\"{dlg.FileName}\" \"{arg}\"";
+        if (string.IsNullOrWhiteSpace(IconBox.Text)) IconBox.Text = dlg.FileName;
         if (string.IsNullOrWhiteSpace(NameBox.Text))
-            NameBox.Text = $"用 {Path.GetFileNameWithoutExtension(path)} 打开";
+            NameBox.Text = $"用 {Path.GetFileNameWithoutExtension(dlg.FileName)} 打开";
     }
 
-    private void OnCancel(object? sender, RoutedEventArgs e) => CancelClose();
-
-    private void CancelClose()
+    private void OnOk(object sender, RoutedEventArgs e)
     {
-        _resultSet = true;
-        Close(false);
-    }
-
-    private void OnOk(object? sender, RoutedEventArgs e)
-    {
-        var name = (NameBox.Text ?? "").Trim();
-        var command = (CommandBox.Text ?? "").Trim();
+        var name = NameBox.Text.Trim();
+        var command = CommandBox.Text.Trim();
 
         if (_edit is not null)
         {
@@ -328,12 +270,11 @@ public partial class AddItemDialog : Window
                 ExtendedBox.IsChecked == true,
                 AdminBox.IsChecked == true,
                 CurrentPosition);
-            _resultSet = true;
-            Close(true);
+            DialogResult = true;
             return;
         }
 
-        var key = (KeyBox.Text ?? "").Trim();
+        var key = KeyBox.Text.Trim();
         string? error =
             name.Length == 0 ? "请填写显示名称。" :
             key.Length == 0 ? "请填写注册表键名。" :
@@ -357,7 +298,6 @@ public partial class AddItemDialog : Window
             AdminBox.IsChecked == true,
             CurrentPosition);
 
-        _resultSet = true;
-        Close(true);
+        DialogResult = true;
     }
 }

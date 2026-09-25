@@ -1,6 +1,6 @@
 using System.IO;
-using Avalonia.Media.Imaging;
-using Avalonia.Threading;
+using System.Windows;
+using System.Windows.Media;
 using ContextMenuManager.Models;
 using ContextMenuManager.Services;
 
@@ -19,7 +19,7 @@ public sealed class MenuEntryViewModel : ObservableObject
 
     public MenuEntry Model { get; }
 
-    public Bitmap? Icon { get; private set; }
+    public ImageSource? Icon { get; private set; }
     public bool HasIcon => Icon is not null;
 
     public string FallbackGlyph => Model.Kind switch
@@ -129,7 +129,7 @@ public sealed class MenuEntryViewModel : ObservableObject
             if (!_owner.TryApplyEnabled(this, value))
             {
                 // 写入失败或已排队等待提权：延后通知，让开关回弹到真实状态
-                Dispatcher.UIThread.InvokeAsync(() => OnPropertyChanged(nameof(Enabled)));
+                Application.Current.Dispatcher.InvokeAsync(() => OnPropertyChanged(nameof(Enabled)));
                 return;
             }
             OnPropertyChanged();
@@ -148,7 +148,7 @@ public sealed class MenuEntryViewModel : ObservableObject
                 Refresh();
                 BumpFlash();
             }
-            else Dispatcher.UIThread.InvokeAsync(() => OnPropertyChanged(nameof(Extended)));
+            else Application.Current.Dispatcher.InvokeAsync(() => OnPropertyChanged(nameof(Extended)));
         }
     }
 
@@ -161,7 +161,7 @@ public sealed class MenuEntryViewModel : ObservableObject
             var pos = value switch { 1 => "Top", 2 => "Bottom", _ => "" };
             if (pos == Model.Position) return;
             if (_owner.TryApplyPosition(this, pos)) Refresh();
-            else Dispatcher.UIThread.InvokeAsync(() => OnPropertyChanged(nameof(PositionIndex)));
+            else Application.Current.Dispatcher.InvokeAsync(() => OnPropertyChanged(nameof(PositionIndex)));
         }
     }
 
@@ -231,7 +231,7 @@ public sealed class TweakViewModel : ObservableObject
             }
             else
             {
-                Dispatcher.UIThread.InvokeAsync(() => OnPropertyChanged(nameof(IsOn)));
+                Application.Current.Dispatcher.InvokeAsync(() => OnPropertyChanged(nameof(IsOn)));
             }
         }
     }
