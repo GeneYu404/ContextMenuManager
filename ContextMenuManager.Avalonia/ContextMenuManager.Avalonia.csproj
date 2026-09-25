@@ -36,6 +36,17 @@
     <SelfContained>false</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <DebugType>none</DebugType>
+    <!-- Avalonia 原生库（SkiaSharp 等）打包进 exe，运行时解压到临时目录 -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
+
+  <!-- 发布后清理原生调试符号，保证输出目录只剩单文件 -->
+  <Target Name="CleanNativeSymbols" AfterTargets="Publish">
+    <ItemGroup>
+      <_PublishSymbols Include="$(PublishDir)*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(_PublishSymbols)" />
+    <Message Importance="high" Text="已清理发布符号：@(_PublishSymbols)" Condition="'@(_PublishSymbols)' != ''" />
+  </Target>
 
 </Project>
