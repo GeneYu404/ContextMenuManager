@@ -1,0 +1,534 @@
+<Window x:Class="ContextMenuManager.Avalonia.MainWindow"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:ContextMenuManager.ViewModels"
+        xmlns:views="using:ContextMenuManager.Views"
+        x:DataType="vm:MainViewModel"
+        Title="右键菜单管家"
+        Width="1320" Height="820" MinWidth="1020" MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI">
+
+    <Window.Resources>
+        <!-- 小标签 -->
+        <DataTemplate x:Key="BadgeTemplate" x:DataType="x:String">
+            <Border Classes.badge="True">
+                <TextBlock Text="{Binding}" FontSize="10.5" Opacity="0.85" />
+            </Border>
+        </DataTemplate>
+
+        <ItemsPanelTemplate x:Key="HorizontalPanel">
+            <StackPanel Orientation="Horizontal" />
+        </ItemsPanelTemplate>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="236" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ============================================================ 侧边栏 -->
+        <DockPanel Grid.RowSpan="2" Margin="12,14,8,12">
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="6,0,0,18">
+                <Border Width="32" Height="32" CornerRadius="8"
+                        Background="{DynamicResource AccentBrush}">
+                    <TextBlock Text="&#xE8FD;" Classes.glyph="True" FontSize="16" Foreground="White" />
+                </Border>
+                <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="右键菜单管家" FontSize="14" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding OsLabel}" FontSize="11" Opacity="0.6" />
+                </StackPanel>
+            </StackPanel>
+
+            <StackPanel DockPanel.Dock="Bottom" Margin="4,12,4,0">
+                <!-- 权限状态：普通权限下写 HKLM 才请求提权（按需提权 + 续跑） -->
+                <Border Background="{StaticResource BadgeBrush}" CornerRadius="6" Padding="10,8" Margin="0,0,0,8">
+                    <StackPanel>
+                        <TextBlock Text="{Binding ElevationHint}" TextWrapping="Wrap" FontSize="11.5" Opacity="0.8" />
+                        <Button Command="{Binding RequestElevationCommand}" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                IsVisible="{Binding IsAdmin, Converter={StaticResource InverseBool}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE734;" Classes.glyph="True" FontSize="12" Margin="0,0,6,0" />
+                                <TextBlock Text="以管理员身份重启" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Border>
+                <Button Command="{Binding BackupAllCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Margin="0,0,0,6" Padding="10,6">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE8F1;" Classes.glyph="True" FontSize="13" Margin="0,0,8,0" />
+                        <TextBlock Text="完整备份" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding OpenBackupFolderCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
+                        Padding="10,6">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE838;" Classes.glyph="True" FontSize="13" Margin="0,0,8,0" />
+                        <TextBlock Text="打开备份文件夹" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+
+            <ListBox ItemsSource="{Binding NavItems}" SelectedItem="{Binding SelectedNav, Mode=TwoWay}"
+                     Background="Transparent" BorderThickness="0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:NavItem">
+                        <StackPanel>
+                            <Border Height="1" Background="{StaticResource StrokeBrush}" Margin="0,6,0,10"
+                                    IsVisible="{Binding StartsGroup}" />
+                            <Grid Height="30">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="28" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Glyph}" Classes.glyph="True" HorizontalAlignment="Left" />
+                                <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="13" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Grid.Column="2" Text="{Binding Count}" FontFamily="{StaticResource MonoFont}"
+                                           FontSize="10.5" Opacity="0.5" VerticalAlignment="Center" />
+                            </Grid>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+
+        <!-- ============================================================ 内容区 -->
+        <Border Grid.Column="1" Background="{StaticResource LayerBrush}" BorderBrush="{StaticResource StrokeBrush}"
+                BorderThickness="1,1,0,0" CornerRadius="8,0,0,0">
+            <Grid>
+
+                <!-- ============================================================ 场景页 -->
+                <Grid Margin="24,20,20,16" IsVisible="{Binding IsScenePage}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="352" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!-- 标题 -->
+                    <DockPanel Grid.ColumnSpan="2" Margin="0,0,0,14">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+                            <Button Content="全部启用" Command="{Binding EnableAllCommand}" />
+                            <Button Content="全部禁用" Command="{Binding DisableAllCommand}" />
+                            <Button Command="{Binding RefreshCommand}" ToolTip.Tip="刷新 (F5)">
+                                <TextBlock Text="&#xE72C;" Classes.glyph="True" FontSize="13" />
+                            </Button>
+                            <Button Theme="{StaticResource AccentButton}" Command="{Binding AddCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE710;" Classes.glyph="True" FontSize="12" Foreground="White"
+                                               Margin="0,0,6,0" />
+                                    <TextBlock Text="新建菜单项" Foreground="White" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal">
+                            <Border Width="46" Height="46" Classes.card="True" CornerRadius="10">
+                                <TextBlock Text="{Binding PageGlyph}" Classes.glyph="True" FontSize="20"
+                                           Foreground="{DynamicResource AccentBrush}" />
+                            </Border>
+                            <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding PageTitle}" FontSize="24" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding PageDescription}" Opacity="0.65" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+                    </DockPanel>
+
+                    <!-- 统计条 -->
+                    <Border Grid.Row="1" Grid.ColumnSpan="2" Classes.card="True" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="110" />
+                                <ColumnDefinition Width="110" />
+                                <ColumnDefinition Width="110" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="16,8">
+                                <TextBlock Text="已启用" FontSize="11" Opacity="0.55" />
+                                <TextBlock Text="{Binding EnabledCount}" Classes.statNumber="True"
+                                           Foreground="{DynamicResource AccentBrush}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="16,8">
+                                <TextBlock Text="已禁用" FontSize="11" Opacity="0.55" />
+                                <TextBlock Text="{Binding DisabledCount}" Classes.statNumber="True" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Margin="16,8">
+                                <TextBlock Text="第三方" FontSize="11" Opacity="0.55" />
+                                <TextBlock Text="{Binding ThirdPartyCount}" Classes.statNumber="True" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="3" Margin="16,8" VerticalAlignment="Center">
+                                <TextBlock Text="开关即时写入：写前抓取现场快照并自动备份，重启后仍可在操作日志中撤销" FontSize="11.5"
+                                           Opacity="0.65" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding RootPathHint}" FontFamily="{StaticResource MonoFont}" FontSize="10.5"
+                                           Opacity="0.45" Margin="0,3,0,0" TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 搜索 + 程序筛选 + 状态筛选 -->
+                    <Grid Grid.Row="2" Margin="0,0,16,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Grid>
+                            <TextBox x:Name="SearchBox" Text="{Binding SearchText}"
+                                     Padding="32,6,8,6" VerticalContentAlignment="Center" />
+                            <TextBlock Text="&#xE721;" Classes.glyph="True" FontSize="13" Opacity="0.5"
+                                       HorizontalAlignment="Left" Margin="11,0,0,0" IsHitTestVisible="False" />
+                            <TextBlock Text="搜索名称、命令、CLSID、发布者…  (Ctrl+F)" Margin="33,0,0,0" VerticalAlignment="Center"
+                                       Opacity="0.45" IsHitTestVisible="False"
+                                       IsVisible="{Binding SearchText, Converter={StaticResource Null}}" />
+                        </Grid>
+                        <ComboBox Grid.Column="1" Width="158" Margin="8,0,0,0"
+                                  ItemsSource="{Binding ProgramOptions}"
+                                  SelectedIndex="{Binding ProgramFilterIndex, Mode=TwoWay}"
+                                  ToolTip.Tip="按所属程序筛选（文件类型场景已按程序分组）" />
+                        <ComboBox Grid.Column="2" Width="112" Margin="8,0,0,0"
+                                  SelectedIndex="{Binding FilterIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="全部" />
+                            <ComboBoxItem Content="已启用" />
+                            <ComboBoxItem Content="已禁用" />
+                            <ComboBoxItem Content="第三方" />
+                        </ComboBox>
+                    </Grid>
+
+                    <!-- 列表：EntryView.Groups 分组渲染 + 载入时按序号错峰淡入 -->
+                    <Border Grid.Row="3" Classes.card="True" Padding="4" Margin="0,0,16,0">
+                        <Grid>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <ItemsControl ItemsSource="{Binding EntriesView.Groups}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:EntryGroup">
+                                            <StackPanel>
+                                                <!-- 组头：未分组时组名为空，隐藏 -->
+                                                <DockPanel Margin="4,12,8,4"
+                                                           IsVisible="{Binding Name, Converter={StaticResource NotNull}}">
+                                                    <TextBlock DockPanel.Dock="Right"
+                                                               Text="{Binding Items.Count, StringFormat='共 {0} 项'}"
+                                                               FontSize="10.5" Opacity="0.45" VerticalAlignment="Center" />
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12"
+                                                               Opacity="0.8" TextTrimming="CharacterEllipsis" />
+                                                </DockPanel>
+                                                <ItemsControl ItemsSource="{Binding Items}"
+                                                              ContainerPrepared="OnEntryContainerPrepared">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:MenuEntryViewModel">
+                                                            <Grid Margin="4,7"
+                                                                  Classes.entryRow="True"
+                                                                  Classes.flash="{Binding FlashToken, Converter={StaticResource FlashOdd}}"
+                                                                  Classes.disabled="{Binding Enabled, Converter={StaticResource InverseBool}}"
+                                                                  views:Fx.SelectedEntry="{Binding $parent[Window].DataContext.SelectedEntry}"
+                                                                  PointerPressed="OnRowPointerPressed">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+
+                                                                <Border Width="36" Height="36" Classes.card="True" Classes.dim="{Binding Enabled, Converter={StaticResource InverseBool}}"
+                                                                        CornerRadius="8">
+                                                                    <Grid>
+                                                                        <Image Source="{Binding Icon}" Width="18" Height="18" />
+                                                                        <TextBlock Text="{Binding FallbackGlyph}" Classes.glyph="True" FontSize="16" Opacity="0.7"
+                                                                                   IsVisible="{Binding HasIcon, Converter={StaticResource InverseBool}}" />
+                                                                    </Grid>
+                                                                </Border>
+
+                                                                <StackPanel Grid.Column="1" Margin="12,0,12,0" VerticalAlignment="Center">
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <TextBlock Text="{Binding Name}" FontSize="13.5" FontWeight="SemiBold"
+                                                                                   TextTrimming="CharacterEllipsis" MaxWidth="360"
+                                                                                   Classes.struck="{Binding Enabled, Converter={StaticResource InverseBool}}" />
+                                                                        <ItemsControl ItemsSource="{Binding Badges}" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                                      ItemTemplate="{StaticResource BadgeTemplate}"
+                                                                                      ItemsPanel="{StaticResource HorizontalPanel}" />
+                                                                    </StackPanel>
+                                                                    <TextBlock Text="{Binding Subtitle}" FontFamily="{StaticResource MonoFont}" FontSize="11"
+                                                                               Opacity="0.55" TextTrimming="CharacterEllipsis" Margin="0,3,0,0" />
+                                                                </StackPanel>
+
+                                                                <CheckBox Grid.Column="2" Theme="{StaticResource SwitchStyle}"
+                                                                          IsChecked="{Binding Enabled, Mode=TwoWay}"
+                                                                          ToolTip.Tip="开关即时写入注册表" />
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"
+                                        IsVisible="{Binding EntriesView.Count, Converter={StaticResource Zero}}">
+                                <TextBlock Text="&#xE9CE;" Classes.glyph="True" FontSize="28" Opacity="0.3" />
+                                <TextBlock Text="没有匹配的菜单项" Opacity="0.5" Margin="0,8,0,0" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- 详情 -->
+                    <Border Grid.Row="2" Grid.RowSpan="2" Grid.Column="1" Classes.card="True">
+                        <Grid>
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24"
+                                        IsVisible="{Binding SelectedEntry, Converter={StaticResource Null}}">
+                                <TextBlock Text="&#xE946;" Classes.glyph="True" FontSize="26" Opacity="0.35" />
+                                <TextBlock Text="选择一个菜单项" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,10,0,4" />
+                                <TextBlock Text="查看它的注册表位置，设置 Shift 显示与菜单位置，所有改动即时生效。"
+                                           TextWrapping="Wrap" TextAlignment="Center" Opacity="0.6" FontSize="12" />
+                            </StackPanel>
+
+                            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                          IsVisible="{Binding SelectedEntry, Converter={StaticResource NotNull}}">
+                                <StackPanel Margin="18">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border Width="48" Height="48" Classes.card="True" CornerRadius="10">
+                                            <Grid>
+                                                <Image Source="{Binding SelectedEntry.Icon}" Width="24" Height="24" />
+                                                <TextBlock Text="{Binding SelectedEntry.FallbackGlyph}" Classes.glyph="True" FontSize="20"
+                                                           Opacity="0.7"
+                                                           IsVisible="{Binding SelectedEntry.HasIcon, Converter={StaticResource InverseBool}}" />
+                                            </Grid>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Margin="12,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding SelectedEntry.Name}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding SelectedEntry.KindLabel}" FontSize="11.5" Opacity="0.6" Margin="0,2,0,0" />
+                                        </StackPanel>
+                                        <CheckBox Grid.Column="2" Theme="{StaticResource SwitchStyle}"
+                                                  IsChecked="{Binding SelectedEntry.Enabled, Mode=TwoWay}" />
+                                    </Grid>
+
+                                    <ItemsControl ItemsSource="{Binding SelectedEntry.Badges}" Margin="0,12,0,0"
+                                                  ItemTemplate="{StaticResource BadgeTemplate}"
+                                                  ItemsPanel="{StaticResource HorizontalPanel}" />
+
+                                    <Border Background="{StaticResource BadgeBrush}" CornerRadius="6" Padding="10,8" Margin="0,12,0,0">
+                                        <TextBlock Text="{Binding SelectedEntry.ScopeNote}" TextWrapping="Wrap" FontSize="11.5" Opacity="0.8" />
+                                    </Border>
+
+                                    <TextBlock Text="注册表位置" Classes.caption="True" />
+                                    <TextBox Text="{Binding SelectedEntry.FullPath, Mode=OneWay}" Classes.mono="True" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Spacing="6">
+                                        <Button Content="复制路径" CommandParameter="{Binding SelectedEntry.FullPath}"
+                                                Command="{Binding CopyCommand}" />
+                                        <Button Content="在注册表编辑器中打开"
+                                                Command="{Binding OpenRegeditCommand}" />
+                                    </StackPanel>
+
+                                    <StackPanel IsVisible="{Binding SelectedEntry.Command, Converter={StaticResource NotNull}}">
+                                        <TextBlock Text="命令 / 模块" Classes.caption="True" />
+                                        <TextBox Text="{Binding SelectedEntry.Command, Mode=OneWay}" Classes.mono="True" />
+                                    </StackPanel>
+
+                                    <StackPanel IsVisible="{Binding SelectedEntry.Clsid, Converter={StaticResource NotNull}}">
+                                        <TextBlock Text="CLSID" Classes.caption="True" />
+                                        <TextBox Text="{Binding SelectedEntry.Clsid, Mode=OneWay}" Classes.mono="True" />
+                                    </StackPanel>
+
+                                    <StackPanel IsVisible="{Binding SelectedEntry.Vendor, Converter={StaticResource NotNull}}">
+                                        <TextBlock Text="发布者" Classes.caption="True" />
+                                        <TextBlock Text="{Binding SelectedEntry.Vendor}" TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <!-- 仅 Shell 命令可设置 -->
+                                    <StackPanel IsVisible="{Binding SelectedEntry.IsShellVerb}">
+                                        <TextBlock Text="显示选项 · 改动即时生效" Classes.caption="True" Margin="0,18,0,8" />
+                                        <DockPanel Margin="0,0,0,10">
+                                            <CheckBox DockPanel.Dock="Right" Theme="{StaticResource SwitchStyle}"
+                                                      IsChecked="{Binding SelectedEntry.Extended, Mode=TwoWay}" />
+                                            <StackPanel>
+                                                <TextBlock Text="仅在按住 Shift 时显示" />
+                                                <TextBlock Text="Extended" FontFamily="{StaticResource MonoFont}" FontSize="10.5" Opacity="0.5" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                        <DockPanel>
+                                            <ComboBox DockPanel.Dock="Right" Width="96"
+                                                      SelectedIndex="{Binding SelectedEntry.PositionIndex, Mode=TwoWay}">
+                                                <ComboBoxItem Content="默认" />
+                                                <ComboBoxItem Content="顶部" />
+                                                <ComboBoxItem Content="底部" />
+                                            </ComboBox>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="菜单位置" />
+                                                <TextBlock Text="Position" FontFamily="{StaticResource MonoFont}" FontSize="10.5" Opacity="0.5" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </StackPanel>
+
+                                    <Button Margin="0,20,0,0" HorizontalAlignment="Left" Padding="12,6"
+                                            IsVisible="{Binding SelectedEntry.IsShellVerb}"
+                                            Command="{Binding EditCommand}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE70F;" Classes.glyph="True" FontSize="13"
+                                                       Margin="0,0,6,0" />
+                                            <TextBlock Text="编辑此项（名称 / 命令 / 图标）" />
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Margin="0,8,0,0" HorizontalAlignment="Left" Padding="12,6"
+                                            IsVisible="{Binding SelectedEntry.CanDelete}"
+                                            Command="{Binding DeleteCommand}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="&#xE74D;" Classes.glyph="True" FontSize="13"
+                                                       Foreground="{StaticResource DangerBrush}" Margin="0,0,6,0" />
+                                            <TextBlock Text="删除此项（自动备份）" Foreground="{StaticResource DangerBrush}" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- ============================================================ 系统优化页 -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              IsVisible="{Binding IsTweaksPage}">
+                    <StackPanel Margin="24,20,24,24" MaxWidth="960" HorizontalAlignment="Left">
+                        <TextBlock Text="系统优化" FontSize="24" FontWeight="SemiBold" />
+                        <TextBlock Text="与右键菜单相关的注册表调整。开关即时写入，可在操作日志中撤销。" Opacity="0.65" Margin="0,4,0,18" />
+                        <ItemsControl ItemsSource="{Binding Tweaks}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:TweakViewModel">
+                                    <Border Classes.card="True" Margin="0,0,0,8" Padding="16,14"
+                                            IsEnabled="{Binding IsApplicable}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="38" Height="38" Classes.card="True" CornerRadius="8" VerticalAlignment="Top">
+                                                <TextBlock Text="{Binding Glyph}" Classes.glyph="True" FontSize="17"
+                                                           Foreground="{DynamicResource AccentBrush}" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Margin="14,0,16,0">
+                                                <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Opacity="0.7" Margin="0,3,0,0" FontSize="12.5" />
+                                                <TextBlock Text="{Binding Tags}" FontSize="11" Opacity="0.5" Margin="0,6,0,0" />
+                                            </StackPanel>
+                                            <CheckBox Grid.Column="2" Theme="{StaticResource SwitchStyle}"
+                                                      IsChecked="{Binding IsOn, Mode=TwoWay}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ============================================================ 操作日志页 -->
+                <Grid Margin="24,20,24,16" IsVisible="{Binding IsLogPage}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Margin="0,0,0,16">
+                        <Button DockPanel.Dock="Right" Content="清空日志" Command="{Binding ClearLogCommand}" VerticalAlignment="Center" />
+                        <StackPanel>
+                            <TextBlock Text="操作日志" FontSize="24" FontWeight="SemiBold" />
+                            <TextBlock Text="每次写入都留下现场快照并随日志落盘，重启后依然可以逐条撤销；备份文件保存在 %LocalAppData%\ContextMenuManager\Backups。"
+                                       Opacity="0.65" Margin="0,4,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Grid.Row="1" Classes.card="True" Padding="4">
+                        <Grid>
+                            <ListBox x:Name="LogList" ItemsSource="{Binding Log}" Background="Transparent" BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:LogItem">
+                                        <Grid Margin="4,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="32" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Glyph}" Classes.glyph="True" HorizontalAlignment="Left" />
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                                           Classes.struck="{Binding Undone}" />
+                                                <TextBlock Text="{Binding Detail}" FontSize="11" Opacity="0.55" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Text="{Binding TimeText}" FontFamily="{StaticResource MonoFont}"
+                                                       FontSize="11" Opacity="0.5" VerticalAlignment="Center" Margin="12,0" />
+                                            <Button Grid.Column="3" Content="撤销" CommandParameter="{Binding}"
+                                                    IsVisible="{Binding CanUndo}"
+                                                    Command="{Binding $parent[Window].DataContext.UndoCommand}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <TextBlock Text="还没有任何操作" HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5"
+                                       IsHitTestVisible="False"
+                                       IsVisible="{Binding Log.Count, Converter={StaticResource Zero}}" />
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <ProgressBar IsIndeterminate="True" Height="3" VerticalAlignment="Top" Margin="1,0,0,0"
+                             IsVisible="{Binding IsBusy}" />
+            </Grid>
+        </Border>
+
+        <!-- ============================================================ 状态栏 -->
+        <Border Grid.Row="1" Grid.Column="1" Padding="16,8" Background="{StaticResource LayerBrush}"
+                BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1,1,0,0">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                    <TextBlock Text="{Binding ToastText}" VerticalAlignment="Center" Opacity="0.7" Margin="0,0,12,0"
+                               IsVisible="{Binding ToastText, Converter={StaticResource NotNull}}" />
+                    <Button Command="{Binding RestartExplorerCommand}" Padding="10,4">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE72C;" Classes.glyph="True" FontSize="12" Margin="0,0,6,0" />
+                            <TextBlock Text="重启资源管理器" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border Background="{StaticResource WarnSoftBrush}" CornerRadius="4" Padding="8,2" Margin="0,0,12,0"
+                            IsVisible="{Binding PendingRestart}">
+                        <TextBlock Text="部分更改需重启资源管理器后生效" Foreground="{StaticResource WarnBrush}" FontSize="11.5" />
+                    </Border>
+
+                    <TextBlock Text="就绪 · 开关即时写入注册表" Opacity="0.55"
+                               IsVisible="{Binding LastLog, Converter={StaticResource Null}}" />
+
+                    <StackPanel Orientation="Horizontal"
+                                IsVisible="{Binding LastLog, Converter={StaticResource NotNull}}">
+                        <TextBlock Text="{Binding LastLog.Glyph}" Classes.glyph="True" FontSize="13" Margin="0,0,8,0" />
+                        <TextBlock Text="{Binding LastLog.Title}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding LastLog.Detail}" Opacity="0.5" Margin="10,0,0,0" MaxWidth="420"
+                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                        <Button Content="撤销 (Ctrl+Z)" Margin="12,0,0,0" Padding="10,2"
+                                IsVisible="{Binding LastLog.CanUndo}"
+                                CommandParameter="{Binding LastLog}"
+                                Command="{Binding UndoCommand}" />
+                    </StackPanel>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+    </Grid>
+</Window>

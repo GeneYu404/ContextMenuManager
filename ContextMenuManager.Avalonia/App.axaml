@@ -1,0 +1,211 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:conv="using:ContextMenuManager.Converters"
+             xmlns:ae="using:Avalonia.Animation.Easings"
+             x:Class="ContextMenuManager.Avalonia.App"
+             RequestedThemeVariant="Default">
+
+  <!-- RequestedThemeVariant="Default"：自动跟随系统深浅色（等价于 WPF 版的 ThemeMode="System"） -->
+  <Application.Resources>
+
+    <FontFamily x:Key="IconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+    <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas, Microsoft YaHei UI</FontFamily>
+
+    <!-- 半透明中性色：浅色 / 深色主题下都成立（与 WPF 版一致） -->
+    <SolidColorBrush x:Key="StrokeBrush" Color="#33808080" />
+    <SolidColorBrush x:Key="StrokeStrongBrush" Color="#A0808080" />
+    <SolidColorBrush x:Key="CardBrush" Color="#0E808080" />
+    <SolidColorBrush x:Key="LayerBrush" Color="#07808080" />
+    <SolidColorBrush x:Key="BadgeBrush" Color="#22808080" />
+    <SolidColorBrush x:Key="WarnBrush" Color="#D9932B" />
+    <SolidColorBrush x:Key="WarnSoftBrush" Color="#22D9932B" />
+    <SolidColorBrush x:Key="DangerBrush" Color="#D3453F" />
+    <!-- 强调色：默认 Win11 蓝；App 启动时若 Fluent 主题提供 SystemAccentColor 则跟随系统 -->
+    <SolidColorBrush x:Key="AccentBrush" Color="#0067C0" />
+    <!-- 选中行底色（低透明度强调色） -->
+    <SolidColorBrush x:Key="SelectionBrush" Color="#2E0067C0" />
+
+    <!-- 转换器：Avalonia 用 IsVisible（bool），不再产出 Visibility -->
+    <conv:InverseBoolConverter x:Key="InverseBool" />
+    <conv:NullToVisibleConverter x:Key="NotNull" />
+    <conv:NullToVisibleConverter x:Key="Null" Invert="True" />
+    <conv:ZeroToBoolConverter x:Key="Zero" />
+    <conv:FlashOddConverter x:Key="FlashOdd" />
+
+    <!-- CheckBox 改造成 Win11 风格开关（WPF 版的 SwitchStyle） -->
+    <ControlTheme x:Key="SwitchStyle" TargetType="CheckBox">
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Focusable" Value="True" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="Template">
+        <ControlTemplate TargetType="CheckBox">
+          <Grid Background="Transparent" Width="40" Height="20">
+            <Border x:Name="Track" CornerRadius="10" BorderThickness="1"
+                    BorderBrush="{StaticResource StrokeStrongBrush}" Background="Transparent" />
+            <Ellipse x:Name="Knob" Width="12" Height="12" Margin="4,0,0,0"
+                     HorizontalAlignment="Left" VerticalAlignment="Center"
+                     Fill="{StaticResource StrokeStrongBrush}" />
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:checked /template/ Border#Track">
+        <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      </Style>
+      <Style Selector="^:checked /template/ Ellipse#Knob">
+        <Setter Property="Fill" Value="White" />
+        <Setter Property="HorizontalAlignment" Value="Right" />
+        <Setter Property="Margin" Value="0,0,4,0" />
+      </Style>
+      <Style Selector="^:pointerover /template/ Ellipse#Knob">
+        <Setter Property="Width" Value="14" />
+        <Setter Property="Height" Value="14" />
+      </Style>
+      <Style Selector="^:disabled">
+        <Setter Property="Opacity" Value="0.4" />
+      </Style>
+    </ControlTheme>
+
+    <!-- 强调色按钮（WPF 版的 AccentButton） -->
+    <ControlTheme x:Key="AccentButton" TargetType="Button">
+      <Setter Property="Foreground" Value="White" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Padding" Value="14,6" />
+      <Setter Property="Template">
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="Root" CornerRadius="5" Padding="{TemplateBinding Padding}"
+                  Background="{DynamicResource AccentBrush}">
+            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                              Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}" />
+          </Border>
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:pointerover /template/ Border#Root">
+        <Setter Property="Opacity" Value="0.88" />
+      </Style>
+      <Style Selector="^:pressed /template/ Border#Root">
+        <Setter Property="Opacity" Value="0.75" />
+      </Style>
+      <Style Selector="^:disabled">
+        <Setter Property="Opacity" Value="0.4" />
+      </Style>
+    </ControlTheme>
+
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <!-- 列表项横向拉伸（WPF ListBox 的 HorizontalContentAlignment=Stretch 等价物） -->
+    <Style Selector="ListBoxItem">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+
+    <!-- 卡片容器 -->
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{StaticResource CardBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource StrokeBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <!-- 小标签 -->
+    <Style Selector="Border.badge">
+      <Setter Property="Background" Value="{StaticResource BadgeBrush}" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="6,1" />
+      <Setter Property="Margin" Value="0,0,4,0" />
+    </Style>
+
+    <!-- 小节标题 -->
+    <Style Selector="TextBlock.caption">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Opacity" Value="0.6" />
+      <Setter Property="Margin" Value="0,14,0,6" />
+    </Style>
+
+    <!-- 图标字形 -->
+    <Style Selector="TextBlock.glyph">
+      <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <!-- 等宽只读文本框，用于显示注册表路径 / 命令 -->
+    <Style Selector="TextBox.mono">
+      <Setter Property="IsReadOnly" Value="True" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+      <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="Padding" Value="8,6" />
+      <Setter Property="Background" Value="{StaticResource CardBrush}" />
+      <Setter Property="BorderBrush" Value="{StaticResource StrokeBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <!-- 统计数字 -->
+    <Style Selector="TextBlock.statNumber">
+      <Setter Property="FontSize" Value="22" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- 删除线：禁用条目 / 已撤销日志（WPF 的 DataTemplate.Triggers） -->
+    <Style Selector="TextBlock.struck">
+      <Setter Property="TextDecorations" Value="Strikethrough" />
+      <Setter Property="Opacity" Value="0.5" />
+    </Style>
+
+    <!-- 禁用条目：图标变暗（WPF 的 IconBox Opacity=0.4） -->
+    <Style Selector="Border.dim">
+      <Setter Property="Opacity" Value="0.4" />
+    </Style>
+
+    <!-- ============================================================ 行闪光 / 选中 -->
+    <Style Selector="Grid.entryRow">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+
+    <Style Selector="Grid.entryRow.selected">
+      <Setter Property="Background" Value="{StaticResource SelectionBrush}" />
+    </Style>
+
+    <!-- 写入成功：整行闪一次绿光（Classes.flash 按 FlashToken 奇偶翻转触发） -->
+    <Style Selector="Grid.entryRow.flash">
+      <Style.Animations>
+        <Animation Duration="0:0:0.95">
+          <Animation.Easing>
+            <ae:CubicEaseOut />
+          </Animation.Easing>
+          <KeyFrame Cue="0%">
+            <Setter Property="Background" Value="#463FA472" />
+          </KeyFrame>
+          <KeyFrame Cue="100%">
+            <Setter Property="Background" Value="Transparent" />
+          </KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- 禁用状态：闪红光（特异性更高，覆盖上面的绿） -->
+    <Style Selector="Grid.entryRow.disabled.flash">
+      <Style.Animations>
+        <Animation Duration="0:0:0.95">
+          <Animation.Easing>
+            <ae:CubicEaseOut />
+          </Animation.Easing>
+          <KeyFrame Cue="0%">
+            <Setter Property="Background" Value="#46D3453F" />
+          </KeyFrame>
+          <KeyFrame Cue="100%">
+            <Setter Property="Background" Value="Transparent" />
+          </KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+  </Application.Styles>
+
+</Application>

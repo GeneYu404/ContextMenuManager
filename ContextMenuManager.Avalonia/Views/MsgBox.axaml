@@ -1,0 +1,21 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ContextMenuManager.Views.MsgBox"
+        Title="提示"
+        Width="420"
+        SizeToContent="Height"
+        MaxHeight="640"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI">
+
+  <!-- Avalonia 没有内置 MessageBox：UiBridge 的 ShowError / Confirm 走这里 -->
+  <StackPanel Margin="22,20" Spacing="18">
+    <TextBlock x:Name="MessageText" TextWrapping="Wrap" FontSize="13" />
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button x:Name="SecondaryButton" Content="取消" MinWidth="88" Click="OnSecondary" />
+      <Button x:Name="PrimaryButton" Content="确定" MinWidth="88" Click="OnPrimary" />
+    </StackPanel>
+  </StackPanel>
+</Window>
